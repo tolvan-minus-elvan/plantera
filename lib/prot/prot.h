@@ -14,10 +14,18 @@ enum struct units : uint8_t {
 enum struct fields : uint8_t {
   SSID = 0,
   password = 1,
-  plant_id = 2,
-  humidity = 3,
-  lower_limit = 4,
-  upper_limit = 5,
+  plant_0 = 2,
+  plant_1 = 3,
+  plant_2 = 4,
+  plant_3 = 5,
+  plant_4 = 6,
+  plant_5 = 7,
+  plant_6 = 8,
+  plant_7 = 9,
+  plant_id = 10,
+  humidity = 11,
+  lower_limit = 12,
+  upper_limit = 13,
 };
 enum struct messages : uint8_t {
   wifi_config = 0,
@@ -117,7 +125,49 @@ public:
 
 class active_plants_from_plant_to_web {
 public:
-  uint8_t size = 0;
+  uint8_t bit_field = 0;
+  static_assert((sizeof(bit_field) == 1), "invalid size");
+  void set_plant_0(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 0)) + !value * (bit_field & ~(1 << 0));
+  }
+  bool get_plant_0() { return bit_field & (1 << 0); }
+  void set_plant_1(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 1)) + !value * (bit_field & ~(1 << 1));
+  }
+  bool get_plant_1() { return bit_field & (1 << 1); }
+  void set_plant_2(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 2)) + !value * (bit_field & ~(1 << 2));
+  }
+  bool get_plant_2() { return bit_field & (1 << 2); }
+  void set_plant_3(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 3)) + !value * (bit_field & ~(1 << 3));
+  }
+  bool get_plant_3() { return bit_field & (1 << 3); }
+  void set_plant_4(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 4)) + !value * (bit_field & ~(1 << 4));
+  }
+  bool get_plant_4() { return bit_field & (1 << 4); }
+  void set_plant_5(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 5)) + !value * (bit_field & ~(1 << 5));
+  }
+  bool get_plant_5() { return bit_field & (1 << 5); }
+  void set_plant_6(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 6)) + !value * (bit_field & ~(1 << 6));
+  }
+  bool get_plant_6() { return bit_field & (1 << 6); }
+  void set_plant_7(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 7)) + !value * (bit_field & ~(1 << 7));
+  }
+  bool get_plant_7() { return bit_field & (1 << 7); }
+  uint8_t size = 1;
   enum messages message = messages::active_plants;
   enum units source = units::plant;
   enum units target = units::web;
@@ -126,8 +176,15 @@ public:
   enum units get_target() { return target; }
   uint8_t id = 4;
   uint8_t get_id() { return id; }
-  void build_buf(uint8_t *buf, uint8_t *index) {}
-  void parse_buf(uint8_t *buf) {}
+  void build_buf(uint8_t *buf, uint8_t *index) {
+    memcpy(buf + *index, &bit_field, sizeof(bit_field));
+    *index += sizeof(bit_field);
+  }
+  void parse_buf(uint8_t *buf) {
+    uint8_t index = 0;
+    memcpy(&bit_field, buf + index, sizeof(bit_field));
+    index += sizeof(bit_field);
+  }
 };
 
 class humidity_measurement_from_plant_to_web {

@@ -90,7 +90,7 @@ uint8_t id_to_len(uint8_t id) {
     return 0;
     break;
   case 4:
-    return 0;
+    return 1;
     break;
   case 5:
     return 9;
