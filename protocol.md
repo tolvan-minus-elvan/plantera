@@ -67,12 +67,12 @@ GENERATED FILE DO NOT EDIT
 <td>SSID</td>
 <td>fixedString</td>
 <td>fixedString</td>
-<td>size=64<td></tr>
+<td>size=64</td></tr>
 <tr>
 <td>password</td>
 <td>fixedString</td>
 <td>fixedString</td>
-<td>size=64<td></tr>
+<td>size=64</td></tr>
 </tbody>
 </table>
 
