@@ -2,11 +2,12 @@
 #include <WiFi.h>
 #include <EEPROM.h>
 #include <stdint.h>
+#include <ESPmDNS.h> // connect to server using "hostname".local, awesome!
 
-#include "prot.h"
-#include "DataProtocol.h"
-#include "setup_page.h"
-#include "main_page.h"
+#include "prot.h" // generated file
+#include "DataProtocol.h" // to extract and parse data
+#include "setup_page.h" // setup page, using xxd
+#include "main_page.h" // main page, using xxd
 
 #define WIFI_PASSWORD_LEN 64
 #define WIFI_SSID_LEN 64
@@ -25,7 +26,7 @@
 #define PLANTS_ADDRESS 128
 
 #define INIT_AP_PIN 4
-#define WATER_LEVEL_MEAURE_PIN -1
+#define WATER_LEVEL_MEASURE_PIN -1
 #define WATER_LEVEL_CONTROL_PIN -1
 
 #define LED_R_PIN -1
@@ -80,10 +81,11 @@ void connect_to_wifi() {
     WiFi.mode(WIFI_STA);
     WiFi.begin(wifi_ssid, wifi_password);
     hotspot_active = false;
+    dispRgb(0, 0, 0); // no news are good news
   }
 }
 
-void answerGet(uint8_t* buf, uint8_t len) {
+void answerGet(uint8_t* buf, uint16_t len) {
   char len_buf[10];
   itoa(len, len_buf, 10);
   client.write("HTTP/1.1 200 OK\r\n");
@@ -97,7 +99,7 @@ void answerGet(uint8_t* buf, uint8_t len) {
   client.stop();
 }
 
-void answerPost(uint8_t* buf, uint8_t len) {
+void answerPost(uint8_t* buf, uint16_t len) {
   char len_buf[10];
   itoa(len, len_buf, 10);
   client.write("HTTP/1.1 200 OK\r\n");
@@ -125,7 +127,6 @@ void DataProcotolCallback(uint8_t id, uint8_t* buf, uint8_t len) {
 
 void setup() {
   Serial.begin(115200);
-  delay(5000);
 
   //init pins;
   pinMode(LED_R_PIN, OUTPUT);
@@ -154,7 +155,8 @@ void setup() {
     wifi_password[i] = EEPROM.read(WIFI_PASSWORD_ADDRESS + i);
   }
   connect_to_wifi();
-  WiFi.setHostname(HOSTNAME);
+
+  MDNS.begin(HOSTNAME);
   //init plant config
   for (uint8_t i = 0; i < AMOUNT_OF_PLANTS; i++) {
     uint8_t len = sizeof(plant_config);
@@ -170,8 +172,9 @@ void loop() {
   static uint32_t last_measurement;
   if (!server_active && (WiFi.isConnected() || hotspot_active)) {
     server.begin(80);
+    server_active = true;
   }
-  dispRgb(0, 0, 0); // no news are good news
+  
   if (!WiFi.isConnected() && !hotspot_active) {
     dispRgb(255, 0, 0); // red
     connect_to_wifi();
