@@ -5,7 +5,7 @@
 #include <ESPmDNS.h> // connect to server using "hostname".local, awesome!
 
 #include "prot.h" // generated file
-#include "DataProtocol.h" // to extract and parse data
+//#include "DataProtocol.h"
 #include "setup_page.h" // setup page, using xxd
 #include "main_page.h" // main page, using xxd
 
@@ -19,7 +19,7 @@
 #define HOSTNAME "plantera"
 
 #define SERVER_TIMEOUT 10000 // 10 seconds
-#define EEPROM_SIZE (128 + sizeof(plant_base) * AMOUNT_OF_PLANTS)
+#define EEPROM_SIZE (128 + sizeof(plant_config) * AMOUNT_OF_PLANTS)
 
 #define MESSAGE_BUF_LEN 256
 
@@ -61,7 +61,6 @@ bool server_active = false;
 struct plant_base plants[AMOUNT_OF_PLANTS];
 WiFiServer server;
 WiFiClient client;
-DataProtocol protocol;
 
 void read_water_level(){}
 void update_plant(plant_base plant){}
@@ -118,16 +117,19 @@ void prot::rx(prot::wifi_config_from_web_to_plant msg) {
   memcpy(wifi_password, msg.get_password(), sizeof(wifi_password));
   EEPROM.writeBytes(WIFI_SSID_ADDRESS, wifi_ssid, WIFI_SSID_LEN);
   EEPROM.writeBytes(WIFI_PASSWORD_ADDRESS, wifi_password, WIFI_PASSWORD_LEN);
+  answerPost(nullptr, 0);
   connect_to_wifi();
 }
 
-void DataProcotolCallback(uint8_t id, uint8_t* buf, uint8_t len) {
-  prot::parse_message(id, buf);
+void prot::rx(prot::configure_plant_from_web_to_plant msg) {
+  plant_base* target = &plants[msg.get_id()];
+  target->config.lower_limit = msg.get_lower_limit();
+  target->config.upper_limit = msg.get_upper_limit();
+  answerPost(nullptr, 0);
 }
 
 void setup() {
   Serial.begin(115200);
-
   //init pins;
   pinMode(LED_R_PIN, OUTPUT);
   pinMode(LED_G_PIN, OUTPUT);
@@ -206,6 +208,7 @@ void loop() {
         break;
       }
     }
+    client.readBytes(line, len);
     if (memcmp(first_line, "GET", 3) == 0) {
       if (hotspot_active) {
         answerGet((uint8_t*) setup_page, sizeof(setup_page));
@@ -214,8 +217,7 @@ void loop() {
       }
     } else
     if (memcmp(first_line, "POST", 4) == 0) {
-      client.readBytes(line, len);
-      protocol.parse_frame(line, len);
+      prot::parse_message(line[0], line + 1);
     }
   }
   if (millis() - last_measurement < UPDATE_DELAY) {
