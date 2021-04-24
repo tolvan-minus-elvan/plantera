@@ -7,6 +7,31 @@
 <body>
     SSID: <input type="text" id="SSID"> <br>
     Password: <input type="text" id="password"> <br>
-    <input type="button" value="send">
+    <input type="button" id="send" value="send"><br>
+    <p id="goodbye"></p>
+    <script>
+        "use strict";
+        let ssid = document.getElementById("SSID");
+        let password = document.getElementById("password");
+        let button = document.getElementById("send");
+        let goodbye = document.getElementById("goodbye");
+        function pad(str, len) {
+            while (str.length < len) {
+                str += "\x00"
+            }
+            return str;
+        }
+
+        button.addEventListener("click", () => {
+            let buf = "\x00" + pad(ssid.value, 64) + pad(password.value, 64)
+            console.log(buf.length)
+            fetch("trollolol", {
+                method: "POST", 
+                body: buf,
+            }).then(() => {
+                goodbye.textContent = "Updated! goodbye"
+            })
+        })
+    </script>
 </body>
 </html>

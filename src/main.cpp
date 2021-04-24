@@ -11,7 +11,7 @@
 
 #define WIFI_PASSWORD_LEN 64
 #define WIFI_SSID_LEN 64
-#define WIFI_PASSWORD_ADDRESS 64
+#define WIFI_PASSWORD_ADDRESS (WIFI_SSID_LEN + WIFI_SSID_ADDRESS)
 #define WIFI_SSID_ADDRESS 0
 #define HOTSPOT_PASSWORD "plantera"
 #define HOTSPOT_SSID "plantera"
@@ -19,7 +19,7 @@
 #define HOSTNAME "plantera"
 
 #define SERVER_TIMEOUT 10000 // 10 seconds
-#define EEPROM_SIZE (128 + sizeof(plant_config) * AMOUNT_OF_PLANTS)
+#define EEPROM_SIZE (WIFI_PASSWORD_ADDRESS + WIFI_PASSWORD_LEN + sizeof(plant_config) * AMOUNT_OF_PLANTS)
 
 #define MESSAGE_BUF_LEN 256
 
@@ -49,7 +49,7 @@ struct plant_base {
   uint8_t sensor_measure_pin;
   uint8_t sensor_power_pin;
   uint8_t pump_control_pin;
-  uint8_t active_pin; 
+  uint8_t is_connected_pin; 
   bool currently_watering = false;;
   plant_config config;
 };
@@ -109,7 +109,6 @@ void answerPost(uint8_t* buf, uint16_t len) {
   client.write("Connection: close\r\n");
   client.write("\r\n");
   client.write(buf, len);
-  client.stop();
 }
 
 void prot::rx(prot::wifi_config_from_web_to_plant msg) {
@@ -117,6 +116,7 @@ void prot::rx(prot::wifi_config_from_web_to_plant msg) {
   memcpy(wifi_password, msg.get_password(), sizeof(wifi_password));
   EEPROM.writeBytes(WIFI_SSID_ADDRESS, wifi_ssid, WIFI_SSID_LEN);
   EEPROM.writeBytes(WIFI_PASSWORD_ADDRESS, wifi_password, WIFI_PASSWORD_LEN);
+  EEPROM.commit();
   answerPost(nullptr, 0);
   connect_to_wifi();
 }
@@ -138,7 +138,7 @@ void setup() {
   for (uint8_t i = 0; i < AMOUNT_OF_PLANTS; i++) {
     pinMode(plants[i].sensor_power_pin, OUTPUT);
     pinMode(plants[i].sensor_measure_pin, INPUT);
-    pinMode(plants[i].active_pin, INPUT_PULLDOWN);
+    pinMode(plants[i].is_connected_pin, INPUT_PULLDOWN);
     pinMode(plants[i].pump_control_pin, OUTPUT);
   }
   ledcSetup(LED_R_CHANNEL, 5000, 8);
@@ -196,12 +196,12 @@ void loop() {
   uint32_t socket_start = millis();
   while (client && client.connected() && millis() - socket_start < SERVER_TIMEOUT) {
     if (!client.available()) continue;
-    client.readBytesUntil('\n', first_line, sizeof(line));
+    uint8_t first_line_len = client.readBytesUntil('\n', first_line, sizeof(first_line));
     uint8_t len = 0;
     while (true) {
       uint8_t line_len = client.readBytesUntil('\n', line, sizeof(line));
       char header[] = "Content-Length: ";
-      if (memcmp(line, header, strlen(header))) {
+      if (memcmp(line, header, strlen(header)) == 0) {
         len = atoi((char*) (line + strlen(header)));
       }
       if (line_len == 1) {
@@ -218,6 +218,7 @@ void loop() {
     } else
     if (memcmp(first_line, "POST", 4) == 0) {
       prot::parse_message(line[0], line + 1);
+      client.stop();
     }
   }
   if (millis() - last_measurement < UPDATE_DELAY) {
