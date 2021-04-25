@@ -25,7 +25,16 @@
 
 #define PLANTS_ADDRESS 128
 
+#define HUMIDITY_SENSOR_MIN 14000
+#define HUMIDITY_SENSOR_MAX 22000
+
+#define PUMP_TIME 30000
+
+#define WATER_LEVEL_MIN 0
+#define WATER_LEVEL_MAX 20000
+
 #define INIT_AP_PIN 4
+
 #define WATER_LEVEL_MEASURE_PIN -1
 #define WATER_LEVEL_CONTROL_PIN -1
 
@@ -36,7 +45,7 @@
 #define LED_G_CHANNEL 1
 #define LED_B_CHANNEL 2
 
-#define AMOUNT_OF_PLANTS 5
+#define AMOUNT_OF_PLANTS 3
 
 #define UPDATE_DELAY 1000 * 60 * 5 // every 5 minutes
 
@@ -47,7 +56,6 @@ struct plant_config {
 
 struct plant_base {
   uint8_t sensor_measure_pin;
-  uint8_t sensor_power_pin;
   uint8_t pump_control_pin;
   uint8_t is_connected_pin; 
   bool currently_watering = false;;
@@ -61,9 +69,6 @@ bool server_active = false;
 struct plant_base plants[AMOUNT_OF_PLANTS];
 WiFiServer server;
 WiFiClient client;
-
-void read_water_level(){}
-void update_plant(plant_base plant){}
 
 void dispRgb(uint8_t red, uint8_t green, uint8_t blue) {
   ledcWrite(LED_R_CHANNEL, red);
@@ -122,10 +127,40 @@ void prot::rx(prot::wifi_config_from_web_to_plant msg) {
 }
 
 void prot::rx(prot::configure_plant_from_web_to_plant msg) {
+  if (msg.get_id() >= AMOUNT_OF_PLANTS) return; // wtf
+
   plant_base* target = &plants[msg.get_id()];
   target->config.lower_limit = msg.get_lower_limit();
   target->config.upper_limit = msg.get_upper_limit();
+  EEPROM.writeBytes(PLANTS_ADDRESS + sizeof(plant_config) * msg.get_id(), &(target->config), sizeof(plant_config));
+  EEPROM.commit();
   answerPost(nullptr, 0);
+}
+
+float read_water_level() {
+  
+}
+
+void update_plant(plant_base plant) {
+  if (!digitalRead(plant.is_connected_pin)) return;
+
+  uint32_t raw_measurement = analogRead(plant.sensor_measure_pin);
+  float humidity = (raw_measurement - HUMIDITY_SENSOR_MIN) / (HUMIDITY_SENSOR_MAX - HUMIDITY_SENSOR_MIN) * 100.0;
+
+  if (humidity < plant.config.lower_limit) {
+    plant.currently_watering = true;
+  }
+
+  if (humidity > plant.config.lower_limit) {
+    digitalWrite(plant.pump_control_pin, LOW);
+    plant.currently_watering = false;
+  }
+
+  if (plant.currently_watering) {
+    digitalWrite(plant.pump_control_pin, HIGH);
+    delay(PUMP_TIME);
+    digitalWrite(plant.pump_control_pin, LOW);
+  }
 }
 
 void setup() {
@@ -136,7 +171,6 @@ void setup() {
   pinMode(LED_B_PIN, OUTPUT);
   pinMode(INIT_AP_PIN, INPUT_PULLDOWN);
   for (uint8_t i = 0; i < AMOUNT_OF_PLANTS; i++) {
-    pinMode(plants[i].sensor_power_pin, OUTPUT);
     pinMode(plants[i].sensor_measure_pin, INPUT);
     pinMode(plants[i].is_connected_pin, INPUT_PULLDOWN);
     pinMode(plants[i].pump_control_pin, OUTPUT);
@@ -157,8 +191,8 @@ void setup() {
     wifi_password[i] = EEPROM.read(WIFI_PASSWORD_ADDRESS + i);
   }
   connect_to_wifi();
-
   MDNS.begin(HOSTNAME);
+
   //init plant config
   for (uint8_t i = 0; i < AMOUNT_OF_PLANTS; i++) {
     uint8_t len = sizeof(plant_config);
@@ -172,17 +206,20 @@ void setup() {
 
 void loop() {
   static uint32_t last_measurement;
+  // start server
   if (!server_active && (WiFi.isConnected() || hotspot_active)) {
     server.begin(80);
     server_active = true;
   }
   
+  // update wifi status
   if (!WiFi.isConnected() && !hotspot_active) {
     dispRgb(255, 0, 0); // red
     connect_to_wifi();
   }
   read_water_level();
 
+  // handle hotspot
   if (digitalRead(INIT_AP_PIN) && !hotspot_active) {
     WiFi.disconnect();
     WiFi.mode(WIFI_AP);
@@ -190,15 +227,21 @@ void loop() {
     hotspot_active = true;
     dispRgb(255, 255, 0); // yellow
   }
+
+  // web server
   client = server.available();
   uint8_t line[MESSAGE_BUF_LEN];
   uint8_t first_line[MESSAGE_BUF_LEN];
   uint32_t socket_start = millis();
   while (client && client.connected() && millis() - socket_start < SERVER_TIMEOUT) {
     if (!client.available()) continue;
+    yield();
+    // find first line
     uint8_t first_line_len = client.readBytesUntil('\n', first_line, sizeof(first_line));
     uint8_t len = 0;
-    while (true) {
+    while (millis() - socket_start < SERVER_TIMEOUT) {
+      yield();
+      // read individual lines
       uint8_t line_len = client.readBytesUntil('\n', line, sizeof(line));
       char header[] = "Content-Length: ";
       if (memcmp(line, header, strlen(header)) == 0) {
@@ -218,12 +261,14 @@ void loop() {
     } else
     if (memcmp(first_line, "POST", 4) == 0) {
       prot::parse_message(line[0], line + 1);
-      client.stop();
     }
   }
+  client.stop();
+
   if (millis() - last_measurement < UPDATE_DELAY) {
     return;
   }
+
   last_measurement = millis();
   for (uint8_t i = 0; i < AMOUNT_OF_PLANTS; i++) {
     update_plant(plants[i]);
