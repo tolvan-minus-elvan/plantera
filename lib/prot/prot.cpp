@@ -8,10 +8,12 @@ GENERATED FILE DO NOT EDIT
 namespace prot {
 __attribute__((weak)) void rx(wifi_config_from_web_to_plant msg) {}
 __attribute__((weak)) void rx(configure_plant_from_web_to_plant msg) {}
-__attribute__((weak)) void rx(get_active_plants_from_web_to_plant msg) {}
+__attribute__((weak)) void rx(get_connected_plants_from_web_to_plant msg) {}
 __attribute__((weak)) void rx(get_humidity_measurement_from_web_to_plant msg) {}
 __attribute__((weak)) void rx(get_configuration_from_web_to_plant msg) {}
-__attribute__((weak)) void rx(active_plants_from_plant_to_web msg) {}
+__attribute__((weak)) void rx(get_water_level_from_web_to_plant msg) {}
+__attribute__((weak)) void rx(water_level_from_plant_to_web msg) {}
+__attribute__((weak)) void rx(connected_plants_from_plant_to_web msg) {}
 __attribute__((weak)) void rx(humidity_measurement_from_plant_to_web msg) {}
 __attribute__((weak)) void rx(configuration_from_plant_to_web msg) {}
 void parse_message(uint8_t id, uint8_t *buf) {
@@ -29,7 +31,7 @@ void parse_message(uint8_t id, uint8_t *buf) {
     break;
   }
   case 2: {
-    get_active_plants_from_web_to_plant __message;
+    get_connected_plants_from_web_to_plant __message;
     __message.parse_buf(buf);
     rx(__message);
     break;
@@ -47,18 +49,30 @@ void parse_message(uint8_t id, uint8_t *buf) {
     break;
   }
   case 5: {
-    active_plants_from_plant_to_web __message;
+    get_water_level_from_web_to_plant __message;
     __message.parse_buf(buf);
     rx(__message);
     break;
   }
   case 6: {
-    humidity_measurement_from_plant_to_web __message;
+    water_level_from_plant_to_web __message;
     __message.parse_buf(buf);
     rx(__message);
     break;
   }
   case 7: {
+    connected_plants_from_plant_to_web __message;
+    __message.parse_buf(buf);
+    rx(__message);
+    break;
+  }
+  case 8: {
+    humidity_measurement_from_plant_to_web __message;
+    __message.parse_buf(buf);
+    rx(__message);
+    break;
+  }
+  case 9: {
     configuration_from_plant_to_web __message;
     __message.parse_buf(buf);
     rx(__message);
@@ -93,6 +107,12 @@ bool is_valid_id(uint8_t id) {
   case 7:
     return true;
     break;
+  case 8:
+    return true;
+    break;
+  case 9:
+    return true;
+    break;
   default:
     return false;
   }
@@ -119,9 +139,15 @@ uint8_t id_to_len(uint8_t id) {
     return 0;
     break;
   case 6:
-    return 9;
+    return 4;
     break;
   case 7:
+    return 1;
+    break;
+  case 8:
+    return 9;
+    break;
+  case 9:
     return 0;
     break;
   default:
@@ -147,12 +173,18 @@ enum nodes id_to_sender(uint8_t id) {
     return nodes::web;
     break;
   case 5:
-    return nodes::plant;
+    return nodes::web;
     break;
   case 6:
     return nodes::plant;
     break;
   case 7:
+    return nodes::plant;
+    break;
+  case 8:
+    return nodes::plant;
+    break;
+  case 9:
     return nodes::plant;
     break;
   }
@@ -176,12 +208,18 @@ enum nodes id_to_receiver(uint8_t id) {
     return nodes::plant;
     break;
   case 5:
-    return nodes::web;
+    return nodes::plant;
     break;
   case 6:
     return nodes::web;
     break;
   case 7:
+    return nodes::web;
+    break;
+  case 8:
+    return nodes::web;
+    break;
+  case 9:
     return nodes::web;
     break;
   }
@@ -211,6 +249,12 @@ enum categories id_to_category(uint8_t id) {
     return categories::none;
     break;
   case 7:
+    return categories::none;
+    break;
+  case 8:
+    return categories::none;
+    break;
+  case 9:
     return categories::none;
     break;
   }

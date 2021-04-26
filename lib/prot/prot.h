@@ -20,17 +20,28 @@ enum struct fields : uint8_t {
   plant_id = 2,
   lower_limit = 3,
   upper_limit = 4,
-  humidity = 5,
+  water_level = 5,
+  plant_0 = 6,
+  plant_1 = 7,
+  plant_2 = 8,
+  plant_3 = 9,
+  plant_4 = 10,
+  plant_5 = 11,
+  plant_6 = 12,
+  plant_7 = 13,
+  humidity = 14,
 };
 enum struct messages : uint8_t {
   wifi_config = 0,
   configure_plant = 1,
-  get_active_plants = 2,
+  get_connected_plants = 2,
   get_humidity_measurement = 3,
   get_configuration = 4,
-  active_plants = 5,
-  humidity_measurement = 6,
-  configuration = 7,
+  get_water_level = 5,
+  water_level = 6,
+  connected_plants = 7,
+  humidity_measurement = 8,
+  configuration = 9,
 };
 enum struct categories : uint8_t {
   none = 0,
@@ -153,10 +164,10 @@ public:
   }
 };
 
-class get_active_plants_from_web_to_plant {
+class get_connected_plants_from_web_to_plant {
 public:
   uint8_t size = 0;
-  enum messages message = messages::get_active_plants;
+  enum messages message = messages::get_connected_plants;
   enum nodes sender = nodes::web;
   enum nodes receiver = nodes::plant;
   uint8_t get_size() { return size; }
@@ -220,12 +231,12 @@ public:
   }
 };
 
-class active_plants_from_plant_to_web {
+class get_water_level_from_web_to_plant {
 public:
   uint8_t size = 0;
-  enum messages message = messages::active_plants;
-  enum nodes sender = nodes::plant;
-  enum nodes receiver = nodes::web;
+  enum messages message = messages::get_water_level;
+  enum nodes sender = nodes::web;
+  enum nodes receiver = nodes::plant;
   uint8_t get_size() { return size; }
   enum nodes get_sender() { return sender; }
   enum nodes get_receiver() { return receiver; }
@@ -233,6 +244,96 @@ public:
   uint8_t get_id() { return id; }
   void build_buf(uint8_t *buf, uint8_t *index) {}
   void parse_buf(uint8_t *buf) {}
+};
+
+class water_level_from_plant_to_web {
+public:
+  float_t water_level;
+  static_assert((sizeof(water_level) == 4), "invalid size");
+  uint8_t size = 4;
+  enum messages message = messages::water_level;
+  enum nodes sender = nodes::plant;
+  enum nodes receiver = nodes::web;
+  uint8_t get_size() { return size; }
+  enum nodes get_sender() { return sender; }
+  enum nodes get_receiver() { return receiver; }
+  uint8_t id = 6;
+  uint8_t get_id() { return id; }
+  void set_water_level(float_t value) { water_level = value; }
+  float_t get_water_level() { return water_level; }
+  void build_buf(uint8_t *buf, uint8_t *index) {
+    memcpy(buf + *index, &water_level, sizeof(water_level));
+    *index += sizeof(water_level);
+  }
+  void parse_buf(uint8_t *buf) {
+    uint8_t index = 0;
+    memcpy(&water_level, buf + index, sizeof(water_level));
+    index += sizeof(water_level);
+  }
+};
+
+class connected_plants_from_plant_to_web {
+public:
+  uint8_t bit_field = 0;
+  static_assert((sizeof(bit_field) == 1), "invalid size");
+  void set_plant_0(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 0)) + !value * (bit_field & ~(1 << 0));
+  }
+  bool get_plant_0() { return bit_field & (1 << 0); }
+  void set_plant_1(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 1)) + !value * (bit_field & ~(1 << 1));
+  }
+  bool get_plant_1() { return bit_field & (1 << 1); }
+  void set_plant_2(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 2)) + !value * (bit_field & ~(1 << 2));
+  }
+  bool get_plant_2() { return bit_field & (1 << 2); }
+  void set_plant_3(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 3)) + !value * (bit_field & ~(1 << 3));
+  }
+  bool get_plant_3() { return bit_field & (1 << 3); }
+  void set_plant_4(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 4)) + !value * (bit_field & ~(1 << 4));
+  }
+  bool get_plant_4() { return bit_field & (1 << 4); }
+  void set_plant_5(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 5)) + !value * (bit_field & ~(1 << 5));
+  }
+  bool get_plant_5() { return bit_field & (1 << 5); }
+  void set_plant_6(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 6)) + !value * (bit_field & ~(1 << 6));
+  }
+  bool get_plant_6() { return bit_field & (1 << 6); }
+  void set_plant_7(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 7)) + !value * (bit_field & ~(1 << 7));
+  }
+  bool get_plant_7() { return bit_field & (1 << 7); }
+  uint8_t size = 1;
+  enum messages message = messages::connected_plants;
+  enum nodes sender = nodes::plant;
+  enum nodes receiver = nodes::web;
+  uint8_t get_size() { return size; }
+  enum nodes get_sender() { return sender; }
+  enum nodes get_receiver() { return receiver; }
+  uint8_t id = 7;
+  uint8_t get_id() { return id; }
+  void build_buf(uint8_t *buf, uint8_t *index) {
+    memcpy(buf + *index, &bit_field, sizeof(bit_field));
+    *index += sizeof(bit_field);
+  }
+  void parse_buf(uint8_t *buf) {
+    uint8_t index = 0;
+    memcpy(&bit_field, buf + index, sizeof(bit_field));
+    index += sizeof(bit_field);
+  }
 };
 
 class humidity_measurement_from_plant_to_web {
@@ -248,7 +349,7 @@ public:
   uint8_t get_size() { return size; }
   enum nodes get_sender() { return sender; }
   enum nodes get_receiver() { return receiver; }
-  uint8_t id = 6;
+  uint8_t id = 8;
   uint8_t get_id() { return id; }
   void set_plant_id(uint8_t value) { plant_id = value; }
   void set_humidity(double_t value) { humidity = value; }
@@ -278,7 +379,7 @@ public:
   uint8_t get_size() { return size; }
   enum nodes get_sender() { return sender; }
   enum nodes get_receiver() { return receiver; }
-  uint8_t id = 7;
+  uint8_t id = 9;
   uint8_t get_id() { return id; }
   void build_buf(uint8_t *buf, uint8_t *index) {}
   void parse_buf(uint8_t *buf) {}
@@ -286,10 +387,12 @@ public:
 
 void rx(wifi_config_from_web_to_plant msg);
 void rx(configure_plant_from_web_to_plant msg);
-void rx(get_active_plants_from_web_to_plant msg);
+void rx(get_connected_plants_from_web_to_plant msg);
 void rx(get_humidity_measurement_from_web_to_plant msg);
 void rx(get_configuration_from_web_to_plant msg);
-void rx(active_plants_from_plant_to_web msg);
+void rx(get_water_level_from_web_to_plant msg);
+void rx(water_level_from_plant_to_web msg);
+void rx(connected_plants_from_plant_to_web msg);
 void rx(humidity_measurement_from_plant_to_web msg);
 void rx(configuration_from_plant_to_web msg);
 void parse_message(uint8_t id, uint8_t *buf);

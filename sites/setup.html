@@ -140,17 +140,28 @@ const fields = {
     plant_id: 2,
     lower_limit: 3,
     upper_limit: 4,
-    humidity: 5,
+    water_level: 5,
+    plant_0: 6,
+    plant_1: 7,
+    plant_2: 8,
+    plant_3: 9,
+    plant_4: 10,
+    plant_5: 11,
+    plant_6: 12,
+    plant_7: 13,
+    humidity: 14,
 }
 const messages = {
     wifi_config: 0,
     configure_plant: 1,
-    get_active_plants: 2,
+    get_connected_plants: 2,
     get_humidity_measurement: 3,
     get_configuration: 4,
-    active_plants: 5,
-    humidity_measurement: 6,
-    configuration: 7,
+    get_water_level: 5,
+    water_level: 6,
+    connected_plants: 7,
+    humidity_measurement: 8,
+    configuration: 9,
 }
 const categories = {
     none: 0,
@@ -273,11 +284,11 @@ class configure_plant_from_web_to_plant {
         return
     }
 }
-class get_active_plants_from_web_to_plant {
+class get_connected_plants_from_web_to_plant {
     constructor() {
         this._sender = nodes.web
         this._receiver = nodes.plant
-        this._message = messages.get_active_plants
+        this._message = messages.get_connected_plants
         this._category = categories.none
         this._id = 2
         this._size = 0
@@ -384,11 +395,11 @@ class get_configuration_from_web_to_plant {
         return
     }
 }
-class active_plants_from_plant_to_web {
+class get_water_level_from_web_to_plant {
     constructor() {
-        this._sender = nodes.plant
-        this._receiver = nodes.web
-        this._message = messages.active_plants
+        this._sender = nodes.web
+        this._receiver = nodes.plant
+        this._message = messages.get_water_level
         this._category = categories.none
         this._id = 5
         this._size = 0
@@ -413,13 +424,144 @@ class active_plants_from_plant_to_web {
         return
     }
 }
+class water_level_from_plant_to_web {
+    constructor() {
+        this._sender = nodes.plant
+        this._receiver = nodes.web
+        this._message = messages.water_level
+        this._category = categories.none
+        this._id = 6
+        this._size = 4
+        this._water_level = 0
+    }
+    get_sender() { return this._sender }
+    get_receiver() { return this._receiver }
+    get_message() { return this._message }
+    get_id() { return this._id }
+    get_size() { return this._size }
+    get_category() { return this._category }
+    set_water_level(value) {
+        this._water_level = value
+    }
+    build_buf() {
+        let buf = new ArrayBuffer(4)
+        let index = 0
+        struct("<f").pack_into(buf, index, this._water_level)
+        index += 4
+        return buf
+    }
+    get_water_level() {
+        return this._water_level
+    }
+    get_all_data() {
+        data = []
+        data.push({field: fields.water_level, value: this.get_water_level()})
+        return data
+    }
+    parse_buf(buf) {
+        index = 0
+        this._water_level = struct("<f").unpack_from(buf, index)[0]
+        index += 4
+        return
+    }
+}
+class connected_plants_from_plant_to_web {
+    constructor() {
+        this._sender = nodes.plant
+        this._receiver = nodes.web
+        this._message = messages.connected_plants
+        this._category = categories.none
+        this._id = 7
+        this._size = 1
+        this._bit_field = 0
+    }
+    get_sender() { return this._sender }
+    get_receiver() { return this._receiver }
+    get_message() { return this._message }
+    get_id() { return this._id }
+    get_size() { return this._size }
+    get_category() { return this._category }
+    set_plant_0(value){
+        this._bit_field =  value * (this._bit_field | (1 << 0)) + (!value) * (this._bit_field & ~(1 << 0))
+    }
+    set_plant_1(value){
+        this._bit_field =  value * (this._bit_field | (1 << 1)) + (!value) * (this._bit_field & ~(1 << 1))
+    }
+    set_plant_2(value){
+        this._bit_field =  value * (this._bit_field | (1 << 2)) + (!value) * (this._bit_field & ~(1 << 2))
+    }
+    set_plant_3(value){
+        this._bit_field =  value * (this._bit_field | (1 << 3)) + (!value) * (this._bit_field & ~(1 << 3))
+    }
+    set_plant_4(value){
+        this._bit_field =  value * (this._bit_field | (1 << 4)) + (!value) * (this._bit_field & ~(1 << 4))
+    }
+    set_plant_5(value){
+        this._bit_field =  value * (this._bit_field | (1 << 5)) + (!value) * (this._bit_field & ~(1 << 5))
+    }
+    set_plant_6(value){
+        this._bit_field =  value * (this._bit_field | (1 << 6)) + (!value) * (this._bit_field & ~(1 << 6))
+    }
+    set_plant_7(value){
+        this._bit_field =  value * (this._bit_field | (1 << 7)) + (!value) * (this._bit_field & ~(1 << 7))
+    }
+    build_buf() {
+        let buf = new ArrayBuffer(1)
+        let index = 0
+        struct("<B").pack_into(buf, index, this._bit_field)
+        index += 1
+        return buf
+    }
+    get_plant_0() {
+        return this._bit_field & (1 << 0)
+    }
+    get_plant_1() {
+        return this._bit_field & (1 << 1)
+    }
+    get_plant_2() {
+        return this._bit_field & (1 << 2)
+    }
+    get_plant_3() {
+        return this._bit_field & (1 << 3)
+    }
+    get_plant_4() {
+        return this._bit_field & (1 << 4)
+    }
+    get_plant_5() {
+        return this._bit_field & (1 << 5)
+    }
+    get_plant_6() {
+        return this._bit_field & (1 << 6)
+    }
+    get_plant_7() {
+        return this._bit_field & (1 << 7)
+    }
+    get_all_data() {
+        data = []
+        data.push({field: fields.plant_0, value: this.get_plant_0()})
+        data.push({field: fields.plant_1, value: this.get_plant_1()})
+        data.push({field: fields.plant_2, value: this.get_plant_2()})
+        data.push({field: fields.plant_3, value: this.get_plant_3()})
+        data.push({field: fields.plant_4, value: this.get_plant_4()})
+        data.push({field: fields.plant_5, value: this.get_plant_5()})
+        data.push({field: fields.plant_6, value: this.get_plant_6()})
+        data.push({field: fields.plant_7, value: this.get_plant_7()})
+        return data
+    }
+    parse_buf(buf) {
+        index = 0
+        this._bit_field = struct("<B").unpack_from(buf, index)[0]
+        index += 1
+        return
+    }
+}
 class humidity_measurement_from_plant_to_web {
     constructor() {
         this._sender = nodes.plant
         this._receiver = nodes.web
         this._message = messages.humidity_measurement
         this._category = categories.none
-        this._id = 6
+        this._id = 8
         this._size = 9
         this._plant_id = 0
         this._humidity = 0
@@ -472,7 +614,7 @@ class configuration_from_plant_to_web {
         this._receiver = nodes.web
         this._message = messages.configuration
         this._category = categories.none
-        this._id = 7
+        this._id = 9
         this._size = 0
     }
     get_sender() { return this._sender }
@@ -505,7 +647,7 @@ function id_to_message_class(id) {
         return receiver
     }
     if (id == 2) {
-        receiver = new get_active_plants_from_web_to_plant()
+        receiver = new get_connected_plants_from_web_to_plant()
         return receiver
     }
     if (id == 3) {
@@ -517,19 +659,26 @@ function id_to_message_class(id) {
         return receiver
     }
     if (id == 5) {
-        receiver = new active_plants_from_plant_to_web()
+        receiver = new get_water_level_from_web_to_plant()
         return receiver
     }
     if (id == 6) {
-        receiver = new humidity_measurement_from_plant_to_web()
+        receiver = new water_level_from_plant_to_web()
         return receiver
     }
     if (id == 7) {
+        receiver = new connected_plants_from_plant_to_web()
+        return receiver
+    }
+    if (id == 8) {
+        receiver = new humidity_measurement_from_plant_to_web()
+        return receiver
+    }
+    if (id == 9) {
         receiver = new configuration_from_plant_to_web()
         return receiver
     }
 }
-
     //END LIBRARY
     ///////////////////////////////////////////////////////////////////////
         "use strict";

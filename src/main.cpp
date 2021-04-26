@@ -50,8 +50,8 @@
 #define UPDATE_DELAY 1000 * 60 * 5 // every 5 minutes
 
 struct plant_config {
-  double lower_limit;
-  double upper_limit;
+  float lower_limit;
+  float upper_limit;
 };
 
 struct plant_base {
@@ -74,6 +74,16 @@ void dispRgb(uint8_t red, uint8_t green, uint8_t blue) {
   ledcWrite(LED_R_CHANNEL, red);
   ledcWrite(LED_G_CHANNEL, green);
   ledcWrite(LED_B_CHANNEL, blue);
+}
+
+float read_water_level() {
+  
+}
+
+float read_humidity(plant_base plant) {
+  uint32_t raw_measurement = analogRead(plant.sensor_measure_pin);
+  float humidity = (raw_measurement - HUMIDITY_SENSOR_MIN) / (HUMIDITY_SENSOR_MAX - HUMIDITY_SENSOR_MIN) * 100.0;
+  return humidity;
 }
 
 void connect_to_wifi() {
@@ -137,16 +147,56 @@ void prot::rx(prot::configure_plant_from_web_to_plant msg) {
   answerPost(nullptr, 0);
 }
 
-float read_water_level() {
-  
+void prot::rx(prot::get_connected_plants_from_web_to_plant msg) {
+  prot::connected_plants_from_plant_to_web response;
+  uint8_t buf[msg.get_size() + 1];
+  uint8_t index = 0;
+  // GOOD programming
+  #if (AMOUNT_OF_PLANTS > 0)
+  response.set_plant_0(digitalRead(plants[0].is_connected_pin));
+  #endif
+  #if (AMOUNT_OF_PLANTS > 1)
+  response.set_plant_1(digitalRead(plants[1].is_connected_pin));
+  #endif
+  #if (AMOUNT_OF_PLANTS > 2)
+  response.set_plant_2(digitalRead(plants[2].is_connected_pin));
+  #endif
+  #if (AMOUNT_OF_PLANTS > 3)
+  response.set_plant_3(digitalRead(plants[3].is_connected_pin));
+  #endif
+  #if (AMOUNT_OF_PLANTS > 4)
+  response.set_plant_4(digitalRead(plants[4].is_connected_pin));
+  #endif
+  #if (AMOUNT_OF_PLANTS > 5)
+  response.set_plant_5(digitalRead(plants[5].is_connected_pin));
+  #endif
+  #if (AMOUNT_OF_PLANTS > 6)
+  response.set_plant_6(digitalRead(plants[6].is_connected_pin));
+  #endif
+  #if (AMOUNT_OF_PLANTS > 7)
+  response.set_plant_7(digitalRead(plants[7].is_connected_pin));
+  #endif
+  buf[index++] = response.get_id();
+  response.build_buf(buf, &index);
+  answerPost(buf, index);
+}
+
+void prot::rx(prot::get_humidity_measurement_from_web_to_plant msg) {
+  prot::humidity_measurement_from_plant_to_web response;
+  uint8_t buf[msg.get_size() + 1];
+  uint8_t index = 0;
+  response.set_plant_id(msg.get_plant_id());
+  plant_base plant = plants[msg.get_plant_id()];
+  response.set_humidity(read_humidity(plant));
+  buf[index++] = response.get_id();
+  response.build_buf(buf, &index);
+  answerPost(buf, index);
 }
 
 void update_plant(plant_base plant) {
   if (!digitalRead(plant.is_connected_pin)) return;
 
-  uint32_t raw_measurement = analogRead(plant.sensor_measure_pin);
-  float humidity = (raw_measurement - HUMIDITY_SENSOR_MIN) / (HUMIDITY_SENSOR_MAX - HUMIDITY_SENSOR_MIN) * 100.0;
-
+  float humidity = read_humidity(plant);
   if (humidity < plant.config.lower_limit) {
     plant.currently_watering = true;
   }
