@@ -7,15 +7,33 @@ GENERATED FILE DO NOT EDIT
 
 namespace prot {
 __attribute__((weak)) void rx(wifi_config_from_web_to_plant msg) {}
+__attribute__((weak)) void rx(wifi_config_from_web_to_plant msg, void *misc) {}
 __attribute__((weak)) void rx(configure_plant_from_web_to_plant msg) {}
+__attribute__((weak)) void rx(configure_plant_from_web_to_plant msg,
+                              void *misc) {}
 __attribute__((weak)) void rx(get_connected_plants_from_web_to_plant msg) {}
+__attribute__((weak)) void rx(get_connected_plants_from_web_to_plant msg,
+                              void *misc) {}
 __attribute__((weak)) void rx(get_humidity_measurement_from_web_to_plant msg) {}
+__attribute__((weak)) void rx(get_humidity_measurement_from_web_to_plant msg,
+                              void *misc) {}
 __attribute__((weak)) void rx(get_configuration_from_web_to_plant msg) {}
+__attribute__((weak)) void rx(get_configuration_from_web_to_plant msg,
+                              void *misc) {}
 __attribute__((weak)) void rx(get_water_level_from_web_to_plant msg) {}
+__attribute__((weak)) void rx(get_water_level_from_web_to_plant msg,
+                              void *misc) {}
 __attribute__((weak)) void rx(water_level_from_plant_to_web msg) {}
+__attribute__((weak)) void rx(water_level_from_plant_to_web msg, void *misc) {}
 __attribute__((weak)) void rx(connected_plants_from_plant_to_web msg) {}
+__attribute__((weak)) void rx(connected_plants_from_plant_to_web msg,
+                              void *misc) {}
 __attribute__((weak)) void rx(humidity_measurement_from_plant_to_web msg) {}
+__attribute__((weak)) void rx(humidity_measurement_from_plant_to_web msg,
+                              void *misc) {}
 __attribute__((weak)) void rx(configuration_from_plant_to_web msg) {}
+__attribute__((weak)) void rx(configuration_from_plant_to_web msg, void *misc) {
+}
 void parse_message(uint8_t id, uint8_t *buf) {
   switch (id) {
   case 0: {
@@ -76,6 +94,71 @@ void parse_message(uint8_t id, uint8_t *buf) {
     configuration_from_plant_to_web __message;
     __message.parse_buf(buf);
     rx(__message);
+    break;
+  }
+  }
+}
+
+void parse_message(uint8_t id, uint8_t *buf, void *misc) {
+  switch (id) {
+  case 0: {
+    wifi_config_from_web_to_plant __message;
+    __message.parse_buf(buf);
+    rx(__message, misc);
+    break;
+  }
+  case 1: {
+    configure_plant_from_web_to_plant __message;
+    __message.parse_buf(buf);
+    rx(__message, misc);
+    break;
+  }
+  case 2: {
+    get_connected_plants_from_web_to_plant __message;
+    __message.parse_buf(buf);
+    rx(__message, misc);
+    break;
+  }
+  case 3: {
+    get_humidity_measurement_from_web_to_plant __message;
+    __message.parse_buf(buf);
+    rx(__message, misc);
+    break;
+  }
+  case 4: {
+    get_configuration_from_web_to_plant __message;
+    __message.parse_buf(buf);
+    rx(__message, misc);
+    break;
+  }
+  case 5: {
+    get_water_level_from_web_to_plant __message;
+    __message.parse_buf(buf);
+    rx(__message, misc);
+    break;
+  }
+  case 6: {
+    water_level_from_plant_to_web __message;
+    __message.parse_buf(buf);
+    rx(__message, misc);
+    break;
+  }
+  case 7: {
+    connected_plants_from_plant_to_web __message;
+    __message.parse_buf(buf);
+    rx(__message, misc);
+    break;
+  }
+  case 8: {
+    humidity_measurement_from_plant_to_web __message;
+    __message.parse_buf(buf);
+    rx(__message, misc);
+    break;
+  }
+  case 9: {
+    configuration_from_plant_to_web __message;
+    __message.parse_buf(buf);
+    rx(__message, misc);
     break;
   }
   }

@@ -9,6 +9,12 @@
 #include "setup_page.h" // setup page, using xxd
 #include "main_page.h" // main page, using xxd
 
+#define CLIENT_PRIORITY 2
+#define SERVER_PRIORITY 2
+#define WIFI_PRIORITY 2
+#define PLANTS_PRIORITY 3
+#define WATER_LEVEL_PRIORITY 2
+
 #define WIFI_PASSWORD_LEN 64
 #define WIFI_SSID_LEN 64
 #define WIFI_PASSWORD_ADDRESS (WIFI_SSID_LEN + WIFI_SSID_ADDRESS)
@@ -62,6 +68,8 @@ struct plant_base {
   plant_config config;
 };
 
+SemaphoreHandle_t wifi_mutex = xSemaphoreCreateMutex(); 
+
 char wifi_password[WIFI_PASSWORD_LEN];
 char wifi_ssid[WIFI_SSID_LEN];
 bool hotspot_active = false;
@@ -99,44 +107,43 @@ void connect_to_wifi() {
   }
 }
 
-void answerGet(uint8_t* buf, uint16_t len) {
+void answerGet(WiFiClient* client, uint8_t* buf, uint16_t len) {
   char len_buf[10];
   itoa(len, len_buf, 10);
-  client.write("HTTP/1.1 200 OK\r\n");
-  client.write("Content-Type: text/html\r\n");
-  client.write("Content-Length: ");
-  client.write(len_buf, strlen(len_buf));
-  client.write("\r\n");
-  client.write("Connection: close\r\n");
-  client.write("\r\n");
-  client.write(buf, len);
-  client.stop();
+  client->write("HTTP/1.1 200 OK\r\n");
+  client->write("Content-Type: text/html\r\n");
+  client->write("Content-Length: ");
+  client->write(len_buf, strlen(len_buf));
+  client->write("\r\n");
+  client->write("Connection: close\r\n");
+  client->write("\r\n");
+  client->write(buf, len);
 }
 
-void answerPost(uint8_t* buf, uint16_t len) {
+void answerPost(WiFiClient* client, uint8_t* buf, uint16_t len) {
   char len_buf[10];
   itoa(len, len_buf, 10);
-  client.write("HTTP/1.1 200 OK\r\n");
-  client.write("Content-Type: application/octet-stream\r\n");
-  client.write("Content-Length: ");
-  client.write(len_buf, strlen(len_buf));
-  client.write("\r\n");
-  client.write("Connection: close\r\n");
-  client.write("\r\n");
-  client.write(buf, len);
+  client->write("HTTP/1.1 200 OK\r\n");
+  client->write("Content-Type: application/octet-stream\r\n");
+  client->write("Content-Length: ");
+  client->write(len_buf, strlen(len_buf));
+  client->write("\r\n");
+  client->write("Connection: close\r\n");
+  client->write("\r\n");
+  client->write(buf, len);
 }
 
-void prot::rx(prot::wifi_config_from_web_to_plant msg) {
+void prot::rx(prot::wifi_config_from_web_to_plant msg, void* client) {
   memcpy(wifi_ssid, msg.get_SSID(), sizeof(wifi_ssid));
   memcpy(wifi_password, msg.get_password(), sizeof(wifi_password));
   EEPROM.writeBytes(WIFI_SSID_ADDRESS, wifi_ssid, WIFI_SSID_LEN);
   EEPROM.writeBytes(WIFI_PASSWORD_ADDRESS, wifi_password, WIFI_PASSWORD_LEN);
   EEPROM.commit();
-  answerPost(nullptr, 0);
+  answerPost((WiFiClient*) client, nullptr, 0);
   connect_to_wifi();
 }
 
-void prot::rx(prot::configure_plant_from_web_to_plant msg) {
+void prot::rx(prot::configure_plant_from_web_to_plant msg, void* client) {
   if (msg.get_id() >= AMOUNT_OF_PLANTS) return; // wtf
 
   plant_base* target = &plants[msg.get_id()];
@@ -144,10 +151,10 @@ void prot::rx(prot::configure_plant_from_web_to_plant msg) {
   target->config.upper_limit = msg.get_upper_limit();
   EEPROM.writeBytes(PLANTS_ADDRESS + sizeof(plant_config) * msg.get_id(), &(target->config), sizeof(plant_config));
   EEPROM.commit();
-  answerPost(nullptr, 0);
+  answerPost((WiFiClient*) client, nullptr, 0);
 }
 
-void prot::rx(prot::get_connected_plants_from_web_to_plant msg) {
+void prot::rx(prot::get_connected_plants_from_web_to_plant msg, void* client) {
   prot::connected_plants_from_plant_to_web response;
   uint8_t buf[msg.get_size() + 1];
   uint8_t index = 0;
@@ -178,10 +185,10 @@ void prot::rx(prot::get_connected_plants_from_web_to_plant msg) {
   #endif
   buf[index++] = response.get_id();
   response.build_buf(buf, &index);
-  answerPost(buf, index);
+  answerPost((WiFiClient*) client, buf, index);
 }
 
-void prot::rx(prot::get_humidity_measurement_from_web_to_plant msg) {
+void prot::rx(prot::get_humidity_measurement_from_web_to_plant msg, void* client) {
   prot::humidity_measurement_from_plant_to_web response;
   uint8_t buf[msg.get_size() + 1];
   uint8_t index = 0;
@@ -190,7 +197,7 @@ void prot::rx(prot::get_humidity_measurement_from_web_to_plant msg) {
   response.set_humidity(read_humidity(plant));
   buf[index++] = response.get_id();
   response.build_buf(buf, &index);
-  answerPost(buf, index);
+  answerPost((WiFiClient*) client, buf, index);
 }
 
 void update_plant(plant_base plant) {
@@ -208,8 +215,132 @@ void update_plant(plant_base plant) {
 
   if (plant.currently_watering) {
     digitalWrite(plant.pump_control_pin, HIGH);
-    delay(PUMP_TIME);
+    vTaskDelay(PUMP_TIME / portTICK_PERIOD_MS);
     digitalWrite(plant.pump_control_pin, LOW);
+  }
+}
+
+
+void updateWiFi(void*) {
+  while(true) {
+    xSemaphoreTake(wifi_mutex, 5);
+    // update wifi status
+    //Serial.println("red");
+    if (!WiFi.isConnected() && !hotspot_active) {
+      //Serial.println("not connected");
+      dispRgb(255, 0, 0); // red
+      connect_to_wifi();
+    }
+
+    // handle hotspot
+    if (digitalRead(INIT_AP_PIN) && !hotspot_active) {
+      Serial.println("enter hotspot");
+      WiFi.disconnect();
+      WiFi.mode(WIFI_AP);
+      WiFi.softAP(HOTSPOT_SSID, HOTSPOT_PASSWORD);
+      hotspot_active = true;
+      dispRgb(255, 255, 0); // yellow
+    }
+    xSemaphoreGive(wifi_mutex);
+    taskYIELD();
+  }
+}
+
+void handleClient(void* pvParameters) {
+  Serial.println("I am here");
+  WiFiClient* client = (WiFiClient*) pvParameters;
+  uint8_t line[MESSAGE_BUF_LEN];
+  uint8_t first_line[MESSAGE_BUF_LEN];
+  uint32_t socket_start = millis();
+  while (client->connected() && millis() - socket_start < SERVER_TIMEOUT) {
+    if (!client->available()) {
+      taskYIELD();
+      continue;
+    }
+    // find first line
+    Serial.println("first line");
+    uint8_t first_line_len = client->readBytesUntil('\n', first_line, sizeof(first_line));
+    
+    uint8_t len = 0;
+    while (millis() - socket_start < SERVER_TIMEOUT) {
+      if (!client->available()) {
+        taskYIELD();
+        continue;
+      }
+      // read individual lines
+      uint8_t line_len = client->readBytesUntil('\n', line, sizeof(line));
+      char header[] = "Content-Length: ";
+      if (memcmp(line, header, strlen(header)) == 0) {
+        len = atoi((char*) (line + strlen(header)));
+      }
+      if (line_len == 1) {
+        break;
+      }
+    }
+    // read body
+    Serial.println("read body");
+    client->readBytes(line, len);
+
+    // switch on http request
+    if (memcmp(first_line, "GET", 3) == 0) {
+      if (hotspot_active) {
+        answerGet(client, (uint8_t*) setup_page, sizeof(setup_page));
+      } else {
+        answerGet(client, (uint8_t*) main_page, sizeof(main_page));
+      }
+    } else
+    if (memcmp(first_line, "POST", 4) == 0) {
+      prot::parse_message(line[0], line + 1);
+    } 
+  }
+  Serial.println("stop");
+  client->stop();
+  free(client); 
+  vTaskDelete(NULL);
+}
+
+void updateServer(void*) {
+  while (true) {
+    xSemaphoreTake(wifi_mutex, 5);
+    if (!server_active && (WiFi.isConnected() || hotspot_active)) {
+      server.begin(80);
+      server_active = true;
+    }
+    xSemaphoreGive(wifi_mutex);
+
+    client = server.available();
+    if (client) {
+      Serial.println("got client");
+      WiFiClient* client_ptr = (WiFiClient*) malloc(sizeof(client));
+      *client_ptr = client;
+      xTaskCreatePinnedToCore(
+        &handleClient,
+        "handle client",
+        configMINIMAL_STACK_SIZE,
+        client_ptr,
+        CLIENT_PRIORITY,
+        NULL,
+        1
+      );
+      Serial.println("sent client");
+    }
+    taskYIELD();
+  }
+}
+
+void updatePlants(void*) {
+  while (true) {
+    uint32_t start = millis();
+    for (uint8_t i = 0; i < AMOUNT_OF_PLANTS; i++) {
+      update_plant(plants[i]);
+    }
+    vTaskDelay((start - millis() + UPDATE_DELAY) / portTICK_PERIOD_MS);
+  }
+}
+
+void updateWaterLevel(void*) {
+  while (true) {
+    taskYIELD();
   }
 }
 
@@ -252,75 +383,38 @@ void setup() {
     }
     memcpy(&(plants[i].config), buf, len);
   }
+
+  xTaskCreatePinnedToCore(
+    &updateWiFi,
+    "update wifi",
+    configMINIMAL_STACK_SIZE * 4,
+    NULL,
+    WIFI_PRIORITY,
+    NULL,
+    1
+  );
+  
+  xTaskCreatePinnedToCore(
+    &updatePlants,
+    "update plants",
+    configMINIMAL_STACK_SIZE,
+    NULL,
+    PLANTS_PRIORITY,
+    NULL,
+    1
+  );
+
+  xTaskCreatePinnedToCore(
+    &updateServer,
+    "update server",
+    configMINIMAL_STACK_SIZE * 4,
+    NULL,
+    SERVER_PRIORITY,
+    NULL,
+    1
+  );
 }
 
 void loop() {
-  static uint32_t last_measurement;
-  // start server
-  if (!server_active && (WiFi.isConnected() || hotspot_active)) {
-    server.begin(80);
-    server_active = true;
-  }
-  
-  // update wifi status
-  if (!WiFi.isConnected() && !hotspot_active) {
-    dispRgb(255, 0, 0); // red
-    connect_to_wifi();
-  }
-  read_water_level();
-
-  // handle hotspot
-  if (digitalRead(INIT_AP_PIN) && !hotspot_active) {
-    WiFi.disconnect();
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP(HOTSPOT_SSID, HOTSPOT_PASSWORD);
-    hotspot_active = true;
-    dispRgb(255, 255, 0); // yellow
-  }
-
-  // web server
-  client = server.available();
-  uint8_t line[MESSAGE_BUF_LEN];
-  uint8_t first_line[MESSAGE_BUF_LEN];
-  uint32_t socket_start = millis();
-  while (client && client.connected() && millis() - socket_start < SERVER_TIMEOUT) {
-    if (!client.available()) continue;
-    yield();
-    // find first line
-    uint8_t first_line_len = client.readBytesUntil('\n', first_line, sizeof(first_line));
-    uint8_t len = 0;
-    while (millis() - socket_start < SERVER_TIMEOUT) {
-      yield();
-      // read individual lines
-      uint8_t line_len = client.readBytesUntil('\n', line, sizeof(line));
-      char header[] = "Content-Length: ";
-      if (memcmp(line, header, strlen(header)) == 0) {
-        len = atoi((char*) (line + strlen(header)));
-      }
-      if (line_len == 1) {
-        break;
-      }
-    }
-    client.readBytes(line, len);
-    if (memcmp(first_line, "GET", 3) == 0) {
-      if (hotspot_active) {
-        answerGet((uint8_t*) setup_page, sizeof(setup_page));
-      } else {
-        answerGet((uint8_t*) main_page, sizeof(main_page));
-      }
-    } else
-    if (memcmp(first_line, "POST", 4) == 0) {
-      prot::parse_message(line[0], line + 1);
-    }
-  }
-  client.stop();
-
-  if (millis() - last_measurement < UPDATE_DELAY) {
-    return;
-  }
-
-  last_measurement = millis();
-  for (uint8_t i = 0; i < AMOUNT_OF_PLANTS; i++) {
-    update_plant(plants[i]);
-  }
+  taskYIELD();
 }

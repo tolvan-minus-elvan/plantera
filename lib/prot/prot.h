@@ -386,16 +386,27 @@ public:
 };
 
 void rx(wifi_config_from_web_to_plant msg);
+void rx(wifi_config_from_web_to_plant msg, void *misc);
 void rx(configure_plant_from_web_to_plant msg);
+void rx(configure_plant_from_web_to_plant msg, void *misc);
 void rx(get_connected_plants_from_web_to_plant msg);
+void rx(get_connected_plants_from_web_to_plant msg, void *misc);
 void rx(get_humidity_measurement_from_web_to_plant msg);
+void rx(get_humidity_measurement_from_web_to_plant msg, void *misc);
 void rx(get_configuration_from_web_to_plant msg);
+void rx(get_configuration_from_web_to_plant msg, void *misc);
 void rx(get_water_level_from_web_to_plant msg);
+void rx(get_water_level_from_web_to_plant msg, void *misc);
 void rx(water_level_from_plant_to_web msg);
+void rx(water_level_from_plant_to_web msg, void *misc);
 void rx(connected_plants_from_plant_to_web msg);
+void rx(connected_plants_from_plant_to_web msg, void *misc);
 void rx(humidity_measurement_from_plant_to_web msg);
+void rx(humidity_measurement_from_plant_to_web msg, void *misc);
 void rx(configuration_from_plant_to_web msg);
+void rx(configuration_from_plant_to_web msg, void *misc);
 void parse_message(uint8_t id, uint8_t *buf);
+void parse_message(uint8_t id, uint8_t *buf, void *misc);
 bool is_valid_id(uint8_t id);
 uint8_t id_to_len(uint8_t id);
 enum nodes id_to_sender(uint8_t id);
