@@ -70,35 +70,6 @@ struct plant_base plants[AMOUNT_OF_PLANTS];
 WiFiServer server;
 WiFiClient client;
 
-void dispRgb(uint8_t red, uint8_t green, uint8_t blue) {
-  ledcWrite(LED_R_CHANNEL, red);
-  ledcWrite(LED_G_CHANNEL, green);
-  ledcWrite(LED_B_CHANNEL, blue);
-}
-
-float read_water_level() {
-  
-}
-
-float read_humidity(plant_base plant) {
-  uint32_t raw_measurement = analogRead(plant.sensor_measure_pin);
-  float humidity = (raw_measurement - HUMIDITY_SENSOR_MIN) / (HUMIDITY_SENSOR_MAX - HUMIDITY_SENSOR_MIN) * 100.0;
-  return humidity;
-}
-
-void connect_to_wifi() {
-  static uint32_t last_attempt = 0;
-  //only try every 10 seconds
-  if (millis() - last_attempt > 10000) {
-    last_attempt = millis();
-    WiFi.softAPdisconnect();
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(wifi_ssid, wifi_password);
-    hotspot_active = false;
-    dispRgb(0, 0, 0); // no news are good news
-  }
-}
-
 void answerGet(uint8_t* buf, uint16_t len) {
   char len_buf[10];
   itoa(len, len_buf, 10);
@@ -126,71 +97,56 @@ void answerPost(uint8_t* buf, uint16_t len) {
   client.write(buf, len);
 }
 
-void prot::rx(prot::wifi_config_from_web_to_plant msg) {
-  memcpy(wifi_ssid, msg.get_SSID(), sizeof(wifi_ssid));
-  memcpy(wifi_password, msg.get_password(), sizeof(wifi_password));
-  EEPROM.writeBytes(WIFI_SSID_ADDRESS, wifi_ssid, WIFI_SSID_LEN);
-  EEPROM.writeBytes(WIFI_PASSWORD_ADDRESS, wifi_password, WIFI_PASSWORD_LEN);
-  EEPROM.commit();
-  answerPost(nullptr, 0);
-  connect_to_wifi();
+void updateServer() {
+  // web server
+  client = server.available();
+  uint8_t line[MESSAGE_BUF_LEN];
+  uint8_t first_line[MESSAGE_BUF_LEN];
+  uint32_t socket_start = millis();
+  while (client && client.connected() && millis() - socket_start < SERVER_TIMEOUT) {
+    if (!client.available()) continue;
+    yield();
+    // find first line
+    uint8_t first_line_len = client.readBytesUntil('\n', first_line, sizeof(first_line));
+    uint8_t len = 0;
+    while (millis() - socket_start < SERVER_TIMEOUT) {
+      yield();
+      // read individual lines
+      uint8_t line_len = client.readBytesUntil('\n', line, sizeof(line));
+      char header[] = "Content-Length: ";
+      if (memcmp(line, header, strlen(header)) == 0) {
+        len = atoi((char*) (line + strlen(header)));
+      }
+      if (line_len == 1) {
+        break;
+      }
+    }
+    client.readBytes(line, len);
+    if (memcmp(first_line, "GET", 3) == 0) {
+      if (hotspot_active) {
+        answerGet((uint8_t*) sites_setup_html, sizeof(sites_setup_html));
+      } else {
+        answerGet((uint8_t*) sites_main_html, sizeof(sites_main_html));
+      }
+    } else
+    if (memcmp(first_line, "POST", 4) == 0) {
+      Serial.write(line, len);
+      prot::parse_message(line[0], line + 1);
+    }
+  }
+  client.stop();
 }
 
-void prot::rx(prot::configure_plant_from_web_to_plant msg) {
-  if (msg.get_id() >= AMOUNT_OF_PLANTS) return; // wtf
-
-  plant_base* target = &plants[msg.get_id()];
-  target->config.lower_limit = msg.get_lower_limit();
-  target->config.upper_limit = msg.get_upper_limit();
-  EEPROM.writeBytes(PLANTS_ADDRESS + sizeof(plant_config) * msg.get_id(), &(target->config), sizeof(plant_config));
-  EEPROM.commit();
-  answerPost(nullptr, 0);
+void dispRgb(uint8_t red, uint8_t green, uint8_t blue) {
+  ledcWrite(LED_R_CHANNEL, red);
+  ledcWrite(LED_G_CHANNEL, green);
+  ledcWrite(LED_B_CHANNEL, blue);
 }
 
-void prot::rx(prot::get_connected_plants_from_web_to_plant msg) {
-  prot::connected_plants_from_plant_to_web response;
-  uint8_t buf[msg.get_size() + 1];
-  uint8_t index = 0;
-  // GOOD programming
-  #if (AMOUNT_OF_PLANTS > 0)
-  response.set_plant_0(digitalRead(plants[0].is_connected_pin));
-  #endif
-  #if (AMOUNT_OF_PLANTS > 1)
-  response.set_plant_1(digitalRead(plants[1].is_connected_pin));
-  #endif
-  #if (AMOUNT_OF_PLANTS > 2)
-  response.set_plant_2(digitalRead(plants[2].is_connected_pin));
-  #endif
-  #if (AMOUNT_OF_PLANTS > 3)
-  response.set_plant_3(digitalRead(plants[3].is_connected_pin));
-  #endif
-  #if (AMOUNT_OF_PLANTS > 4)
-  response.set_plant_4(digitalRead(plants[4].is_connected_pin));
-  #endif
-  #if (AMOUNT_OF_PLANTS > 5)
-  response.set_plant_5(digitalRead(plants[5].is_connected_pin));
-  #endif
-  #if (AMOUNT_OF_PLANTS > 6)
-  response.set_plant_6(digitalRead(plants[6].is_connected_pin));
-  #endif
-  #if (AMOUNT_OF_PLANTS > 7)
-  response.set_plant_7(digitalRead(plants[7].is_connected_pin));
-  #endif
-  buf[index++] = response.get_id();
-  response.build_buf(buf, &index);
-  answerPost(buf, index);
-}
-
-void prot::rx(prot::get_humidity_measurement_from_web_to_plant msg) {
-  prot::humidity_measurement_from_plant_to_web response;
-  uint8_t buf[msg.get_size() + 1];
-  uint8_t index = 0;
-  response.set_plant_id(msg.get_plant_id());
-  plant_base plant = plants[msg.get_plant_id()];
-  response.set_humidity(read_humidity(plant));
-  buf[index++] = response.get_id();
-  response.build_buf(buf, &index);
-  answerPost(buf, index);
+float read_humidity(plant_base plant) {
+  uint32_t raw_measurement = analogRead(plant.sensor_measure_pin);
+  float humidity = (raw_measurement - HUMIDITY_SENSOR_MIN) / (HUMIDITY_SENSOR_MAX - HUMIDITY_SENSOR_MIN) * 100.0;
+  return humidity;
 }
 
 void update_plant(plant_base plant) {
@@ -208,9 +164,81 @@ void update_plant(plant_base plant) {
 
   if (plant.currently_watering) {
     digitalWrite(plant.pump_control_pin, HIGH);
-    delay(PUMP_TIME);
+    uint32_t start = millis();
+    while (millis() - start < PUMP_TIME){
+      updateServer(); // I call this epic multi-tasking
+    }
     digitalWrite(plant.pump_control_pin, LOW);
   }
+}
+
+float read_water_level() {
+  return 0;
+}
+
+void connect_to_wifi() {
+  static uint32_t last_attempt = 0;
+  //only try every 10 seconds
+  if (millis() - last_attempt > 10000) {
+    last_attempt = millis();
+    WiFi.softAPdisconnect();
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(wifi_ssid, wifi_password);
+    hotspot_active = false;
+    dispRgb(0, 0, 0); // no news are good news
+  }
+}
+
+void prot::rx(prot::get_water_level_from_web_to_plant msg) {
+  prot::water_level_from_plant_to_web response;
+  response.set_water_level(read_water_level());
+  uint8_t buf[response.get_size() + 1];
+  uint8_t index = 0;
+  response.build_buf(buf, &index);
+  answerPost(buf, index);
+}
+
+void prot::rx(prot::wifi_config_from_web_to_plant msg) {
+  memcpy(wifi_ssid, msg.get_SSID(), sizeof(wifi_ssid));
+  memcpy(wifi_password, msg.get_password(), sizeof(wifi_password));
+  EEPROM.writeBytes(WIFI_SSID_ADDRESS, wifi_ssid, WIFI_SSID_LEN);
+  EEPROM.writeBytes(WIFI_PASSWORD_ADDRESS, wifi_password, WIFI_PASSWORD_LEN);
+  EEPROM.commit();
+  Serial.println(wifi_ssid);
+  Serial.println(wifi_password);
+  answerPost(nullptr, 0);
+  connect_to_wifi();
+}
+
+void prot::rx(prot::configure_plant_from_web_to_plant msg) {
+  if (msg.get_plant_id() >= AMOUNT_OF_PLANTS) return; // wtf
+
+  plant_base* target = &plants[msg.get_plant_id()];
+  target->config.lower_limit = msg.get_lower_limit();
+  target->config.upper_limit = msg.get_upper_limit();
+  Serial.println(msg.get_upper_limit());
+  Serial.println(msg.get_lower_limit());
+  EEPROM.writeBytes(PLANTS_ADDRESS + sizeof(plant_config) * msg.get_plant_id(), &(target->config), sizeof(plant_config));
+  EEPROM.commit();
+  answerPost(nullptr, 0);
+}
+
+void prot::rx(prot::get_plant_info_from_web_to_plant msg) {
+  if (msg.get_plant_id() >= AMOUNT_OF_PLANTS) return;
+  prot::plant_info_from_plant_to_web response;
+  plant_base plant = plants[msg.get_plant_id()];
+
+  response.set_plant_id(msg.get_plant_id());
+  response.set_is_connected(digitalRead(plant.is_connected_pin));
+  response.set_humidity(5);
+  response.set_lower_limit(plant.config.lower_limit);
+  response.set_upper_limit(plant.config.upper_limit);
+  Serial.println(plant.config.lower_limit);
+  Serial.println(plant.config.upper_limit);
+  uint8_t buf[response.get_size() + 1];
+  uint8_t index = 0;
+  response.build_buf(buf, &index);
+  answerPost(buf, index);
 }
 
 void setup() {
@@ -247,10 +275,7 @@ void setup() {
   for (uint8_t i = 0; i < AMOUNT_OF_PLANTS; i++) {
     uint8_t len = sizeof(plant_config);
     uint8_t buf[len];
-    for (uint8_t j = 0; j < len; j++) {
-      buf[i] = EEPROM.read(PLANTS_ADDRESS + j);
-    }
-    memcpy(&(plants[i].config), buf, len);
+    EEPROM.readBytes(PLANTS_ADDRESS + i * len, &(plants[i].config), len);
   }
 }
 
@@ -265,6 +290,9 @@ void loop() {
   // update wifi status
   if (!WiFi.isConnected() && !hotspot_active) {
     dispRgb(255, 0, 0); // red
+    //Serial.println("not connectd");
+    //Serial.println(wifi_ssid);
+    //Serial.println(wifi_password);
     connect_to_wifi();
   }
   read_water_level();
@@ -276,51 +304,17 @@ void loop() {
     WiFi.softAP(HOTSPOT_SSID, HOTSPOT_PASSWORD);
     hotspot_active = true;
     dispRgb(255, 255, 0); // yellow
+    Serial.println("enter hotspot");
   }
 
-  // web server
-  client = server.available();
-  uint8_t line[MESSAGE_BUF_LEN];
-  uint8_t first_line[MESSAGE_BUF_LEN];
-  uint32_t socket_start = millis();
-  while (client && client.connected() && millis() - socket_start < SERVER_TIMEOUT) {
-    if (!client.available()) continue;
-    yield();
-    // find first line
-    uint8_t first_line_len = client.readBytesUntil('\n', first_line, sizeof(first_line));
-    uint8_t len = 0;
-    while (millis() - socket_start < SERVER_TIMEOUT) {
-      yield();
-      // read individual lines
-      uint8_t line_len = client.readBytesUntil('\n', line, sizeof(line));
-      char header[] = "Content-Length: ";
-      if (memcmp(line, header, strlen(header)) == 0) {
-        len = atoi((char*) (line + strlen(header)));
-      }
-      if (line_len == 1) {
-        break;
-      }
-    }
-    client.readBytes(line, len);
-    if (memcmp(first_line, "GET", 3) == 0) {
-      if (hotspot_active) {
-        answerGet((uint8_t*) setup_page, sizeof(setup_page));
-      } else {
-        answerGet((uint8_t*) main_page, sizeof(main_page));
-      }
-    } else
-    if (memcmp(first_line, "POST", 4) == 0) {
-      prot::parse_message(line[0], line + 1);
-    }
-  }
-  client.stop();
+  updateServer();
 
   if (millis() - last_measurement < UPDATE_DELAY) {
     return;
   }
-
   last_measurement = millis();
   for (uint8_t i = 0; i < AMOUNT_OF_PLANTS; i++) {
     update_plant(plants[i]);
+    updateServer();
   }
 }
