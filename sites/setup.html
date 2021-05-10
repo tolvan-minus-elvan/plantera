@@ -515,7 +515,6 @@ function id_to_message_class(id) {
             out_view[0] = id
             for (let i = 0; i < in_view.byteLength; i++) {
                 out_view[i + 1] = in_view[i]
-                console.log(in_view[i])
             }
             return out
         }
@@ -524,9 +523,6 @@ function id_to_message_class(id) {
             let msg = new wifi_config_from_web_to_plant();
             msg.set_SSID(ssid.value);
             msg.set_password(password.value)
-            msg.parse_buf(msg.build_buf())
-            console.log(msg.get_SSID())
-            console.log(msg.get_password())
             fetch("trollolol", {
                 method: "POST", 
                 body: add_id(msg.get_id(), msg.build_buf()),
