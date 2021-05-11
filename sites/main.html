@@ -4,9 +4,9 @@
     <title>Plantera</title>
     <link rel="preconnect" href="https://fonts.gstatic.com">
     <link href="https://fonts.googleapis.com/css2?family=Pangolin&display=swap" rel="stylesheet"> 
-    <style>    
+    <style> 
+        html { overflow: hidden; }   
         body {
-            
             margin-left: 30%;
             font-family: 'Pangolin', cursive;
             font-size: x-large;
@@ -306,7 +306,7 @@
         <source src="https://ia800701.us.archive.org/35/items/ImBlue_201811/I%27m%20Blue.mp3" type="audio/mp3">
     </audio><br>
     <b style="font-size: xx-large;">Plant info</b> <br>
-    id: <input type="text" value="0" id="plant_id_update"> &lt;--- the plant you want to update :)<br>
+    id: <input type="text" value="0" style="background-color: azure;" id="plant_id_update"> &lt;--- the plant you want to update :)<br>
     is connected: <input type="text" style="background-color: lightgray;" readonly id="is_connected"><br>
     measured moisture: <input type="text" style="background-color: lightgray;" readonly id="humidity">%<br>
     moisture lower limit: <input type="text" style="background-color: lightgray;" readonly id="lower_limit">%<br>
@@ -315,9 +315,9 @@
     <br>
 
     <b style="font-size: xx-large;">configure plant</b><br>
-    id: <input type="text" id="plant_id_config"> <br>
-    moisture lower limit: <input type="text" id="new_lower_limit">%<br>
-    moisture upper limit: <input type="text" id="new_upper_limit">%<br>
+    id: <input type="text" style="background-color: azure;" id="plant_id_config"> <br>
+    moisture lower limit: <input type="text" style="background-color: honeydew;" id="new_lower_limit">%<br>
+    moisture upper limit: <input type="text" style="background-color: honeydew;" id="new_upper_limit">%<br>
     <button style="background-color: pink;" class="btn" type="button" id="config_button"><b>configure</b></button><br>
     <br>
 
