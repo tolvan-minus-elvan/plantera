@@ -25,41 +25,34 @@
 
 #define PLANTS_ADDRESS 128
 
-#define HUMIDITY_SENSOR_MIN 14000
-#define HUMIDITY_SENSOR_MAX 22000
+#define MAX_WATER_ATTEMPTS 15
 
-#define PUMP_TIME 30000
+#define NOT_CONNECTED_LIMIT 15
 
-#define WATER_LEVEL_MIN 0
-#define WATER_LEVEL_MAX 20000
+#define HUMIDITY_SENSOR_MIN 0
+#define HUMIDITY_SENSOR_MAX 4095
 
-#define INIT_AP_PIN 4
+#define PUMP_TIME 5000
 
-#define WATER_LEVEL_MEASURE_PIN -1
-#define WATER_LEVEL_CONTROL_PIN -1
-
-#define LED_R_PIN -1
-#define LED_G_PIN -1
-#define LED_B_PIN -1
-#define LED_R_CHANNEL 0
-#define LED_G_CHANNEL 1
-#define LED_B_CHANNEL 2
+#define INIT_AP_PIN 32
 
 #define AMOUNT_OF_PLANTS 3
 
-#define UPDATE_DELAY 1000 * 60 * 5 // every 5 minutes
+#define UPDATE_DELAY 1000 * 20 * 1 // every 5 minutes
 
 struct plant_config {
   float lower_limit;
   float upper_limit;
+  bool is_connected;
 };
 
 struct plant_base {
   uint8_t sensor_measure_pin;
   uint8_t pump_control_pin;
-  uint8_t is_connected_pin; 
   bool currently_watering = false;;
   plant_config config;
+  uint8_t water_attempts = 0;
+  bool inverted = false;
 };
 
 char wifi_password[WIFI_PASSWORD_LEN];
@@ -137,43 +130,41 @@ void updateServer() {
   client.stop();
 }
 
-void dispRgb(uint8_t red, uint8_t green, uint8_t blue) {
-  ledcWrite(LED_R_CHANNEL, red);
-  ledcWrite(LED_G_CHANNEL, green);
-  ledcWrite(LED_B_CHANNEL, blue);
+bool plant_connected(plant_base* plant) {
+  return plant->config.is_connected;
 }
 
-float read_humidity(plant_base plant) {
-  uint32_t raw_measurement = analogRead(plant.sensor_measure_pin);
-  float humidity = (raw_measurement - HUMIDITY_SENSOR_MIN) / (HUMIDITY_SENSOR_MAX - HUMIDITY_SENSOR_MIN) * 100.0;
+float read_humidity(plant_base* plant) {
+  int32_t raw_measurement = analogRead(plant->sensor_measure_pin);
+  float humidity = (float) (raw_measurement - HUMIDITY_SENSOR_MIN) / (float) (HUMIDITY_SENSOR_MAX - HUMIDITY_SENSOR_MIN) * 100.0;
   return humidity;
 }
 
-void update_plant(plant_base plant) {
-  if (!digitalRead(plant.is_connected_pin)) return;
+void update_plant(plant_base* plant) {
+  if (!plant_connected(plant)) return;
 
   float humidity = read_humidity(plant);
-  if (humidity < plant.config.lower_limit) {
-    plant.currently_watering = true;
+  if (humidity < plant->config.lower_limit) {
+    plant->currently_watering = true;
   }
 
-  if (humidity > plant.config.lower_limit) {
-    digitalWrite(plant.pump_control_pin, LOW);
-    plant.currently_watering = false;
+  if (humidity > plant->config.lower_limit) {
+    plant->currently_watering = false;
   }
 
-  if (plant.currently_watering) {
-    digitalWrite(plant.pump_control_pin, HIGH);
+  if (plant->currently_watering) {
+    plant->water_attempts += 1;
+    if (plant->water_attempts > MAX_WATER_ATTEMPTS) {
+      plant->config.is_connected = false;
+    }
+    digitalWrite(plant->pump_control_pin, !plant->inverted);
     uint32_t start = millis();
     while (millis() - start < PUMP_TIME){
       updateServer(); // I call this epic multi-tasking
+      yield();
     }
-    digitalWrite(plant.pump_control_pin, LOW);
+    digitalWrite(plant->pump_control_pin, plant->inverted);
   }
-}
-
-float read_water_level() {
-  return 0;
 }
 
 void connect_to_wifi() {
@@ -185,17 +176,7 @@ void connect_to_wifi() {
     WiFi.mode(WIFI_STA);
     WiFi.begin(wifi_ssid, wifi_password);
     hotspot_active = false;
-    dispRgb(0, 0, 0); // no news are good news
   }
-}
-
-void prot::rx(prot::get_water_level_from_web_to_plant msg) {
-  prot::water_level_from_plant_to_web response;
-  response.set_water_level(read_water_level());
-  uint8_t buf[response.get_size() + 1];
-  uint8_t index = 0;
-  response.build_buf(buf, &index);
-  answerPost(buf, index);
 }
 
 void prot::rx(prot::wifi_config_from_web_to_plant msg) {
@@ -204,8 +185,6 @@ void prot::rx(prot::wifi_config_from_web_to_plant msg) {
   EEPROM.writeBytes(WIFI_SSID_ADDRESS, wifi_ssid, WIFI_SSID_LEN);
   EEPROM.writeBytes(WIFI_PASSWORD_ADDRESS, wifi_password, WIFI_PASSWORD_LEN);
   EEPROM.commit();
-  Serial.println(wifi_ssid);
-  Serial.println(wifi_password);
   answerPost(nullptr, 0);
   connect_to_wifi();
 }
@@ -216,8 +195,7 @@ void prot::rx(prot::configure_plant_from_web_to_plant msg) {
   plant_base* target = &plants[msg.get_plant_id()];
   target->config.lower_limit = msg.get_lower_limit();
   target->config.upper_limit = msg.get_upper_limit();
-  Serial.println(msg.get_upper_limit());
-  Serial.println(msg.get_lower_limit());
+  target->config.is_connected = msg.get_is_connected();
   EEPROM.writeBytes(PLANTS_ADDRESS + sizeof(plant_config) * msg.get_plant_id(), &(target->config), sizeof(plant_config));
   EEPROM.commit();
   answerPost(nullptr, 0);
@@ -229,12 +207,10 @@ void prot::rx(prot::get_plant_info_from_web_to_plant msg) {
   plant_base plant = plants[msg.get_plant_id()];
 
   response.set_plant_id(msg.get_plant_id());
-  response.set_is_connected(digitalRead(plant.is_connected_pin));
-  response.set_humidity(5);
+  response.set_is_connected(plant_connected(&plant));
+  response.set_humidity(read_humidity(&plant));
   response.set_lower_limit(plant.config.lower_limit);
   response.set_upper_limit(plant.config.upper_limit);
-  Serial.println(plant.config.lower_limit);
-  Serial.println(plant.config.upper_limit);
   uint8_t buf[response.get_size() + 1];
   uint8_t index = 0;
   response.build_buf(buf, &index);
@@ -243,23 +219,28 @@ void prot::rx(prot::get_plant_info_from_web_to_plant msg) {
 
 void setup() {
   Serial.begin(115200);
+  //init plant
+
+  plants[0].pump_control_pin = 13;
+  plants[1].pump_control_pin = 12;
+  plants[2].pump_control_pin = 26;
+  plants[0].inverted = true;
+
+  plants[0].sensor_measure_pin = 36;
+  plants[1].sensor_measure_pin = 39;
+  plants[2].sensor_measure_pin = 34;
+
+  analogReadResolution(12);
+
   //init pins;
-  pinMode(LED_R_PIN, OUTPUT);
-  pinMode(LED_G_PIN, OUTPUT);
-  pinMode(LED_B_PIN, OUTPUT);
-  pinMode(INIT_AP_PIN, INPUT_PULLDOWN);
+  pinMode(INIT_AP_PIN, INPUT_PULLUP);
+  //pinMode(INIT_AP_PIN3, INPUT_PULLDOWN);
   for (uint8_t i = 0; i < AMOUNT_OF_PLANTS; i++) {
     pinMode(plants[i].sensor_measure_pin, INPUT);
-    pinMode(plants[i].is_connected_pin, INPUT_PULLDOWN);
     pinMode(plants[i].pump_control_pin, OUTPUT);
+    digitalWrite(plants[i].pump_control_pin, !plants[i].inverted);
   }
-  ledcSetup(LED_R_CHANNEL, 5000, 8);
-  ledcSetup(LED_G_CHANNEL, 5000, 8);
-  ledcSetup(LED_B_CHANNEL, 5000, 8);
-  ledcAttachPin(LED_R_PIN, LED_R_CHANNEL);
-  ledcAttachPin(LED_G_PIN, LED_G_CHANNEL);
-  ledcAttachPin(LED_B_PIN, LED_B_CHANNEL);
-  
+
   // init wifi
   EEPROM.begin(EEPROM_SIZE);
   for (uint8_t i = 0; i < WIFI_SSID_LEN; i++) {
@@ -289,21 +270,18 @@ void loop() {
   
   // update wifi status
   if (!WiFi.isConnected() && !hotspot_active) {
-    dispRgb(255, 0, 0); // red
     //Serial.println("not connectd");
     //Serial.println(wifi_ssid);
     //Serial.println(wifi_password);
     connect_to_wifi();
   }
-  read_water_level();
 
   // handle hotspot
-  if (digitalRead(INIT_AP_PIN) && !hotspot_active) {
+  if (digitalRead(INIT_AP_PIN) == 0 && !hotspot_active) {
     WiFi.disconnect();
     WiFi.mode(WIFI_AP);
     WiFi.softAP(HOTSPOT_SSID, HOTSPOT_PASSWORD);
     hotspot_active = true;
-    dispRgb(255, 255, 0); // yellow
     Serial.println("enter hotspot");
   }
 
@@ -314,7 +292,7 @@ void loop() {
   }
   last_measurement = millis();
   for (uint8_t i = 0; i < AMOUNT_OF_PLANTS; i++) {
-    update_plant(plants[i]);
+    update_plant(&(plants[i]));
     updateServer();
   }
 }

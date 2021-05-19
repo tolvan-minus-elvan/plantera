@@ -20,9 +20,9 @@ enum struct fields : uint8_t {
   plant_id = 2,
   lower_limit = 3,
   upper_limit = 4,
-  water_level = 5,
-  humidity = 6,
-  is_connected = 7,
+  is_connected = 5,
+  water_level = 6,
+  humidity = 7,
 };
 enum struct messages : uint8_t {
   wifi_config = 0,
@@ -119,7 +119,14 @@ public:
   static_assert((sizeof(lower_limit) == 4), "invalid size");
   float_t upper_limit;
   static_assert((sizeof(upper_limit) == 4), "invalid size");
-  uint8_t size = 9;
+  uint8_t bit_field = 0;
+  static_assert((sizeof(bit_field) == 1), "invalid size");
+  void set_is_connected(bool value) {
+    bit_field =
+        value * (bit_field | (1 << 0)) + !value * (bit_field & ~(1 << 0));
+  }
+  bool get_is_connected() { return bit_field & (1 << 0); }
+  uint8_t size = 10;
   enum messages message = messages::configure_plant;
   enum nodes sender = nodes::web;
   enum nodes receiver = nodes::plant;
@@ -135,6 +142,8 @@ public:
   float_t get_lower_limit() { return lower_limit; }
   float_t get_upper_limit() { return upper_limit; }
   void build_buf(uint8_t *buf, uint8_t *index) {
+    memcpy(buf + *index, &bit_field, sizeof(bit_field));
+    *index += sizeof(bit_field);
     memcpy(buf + *index, &plant_id, sizeof(plant_id));
     *index += sizeof(plant_id);
     memcpy(buf + *index, &lower_limit, sizeof(lower_limit));
@@ -144,6 +153,8 @@ public:
   }
   void parse_buf(uint8_t *buf) {
     uint8_t index = 0;
+    memcpy(&bit_field, buf + index, sizeof(bit_field));
+    index += sizeof(bit_field);
     memcpy(&plant_id, buf + index, sizeof(plant_id));
     index += sizeof(plant_id);
     memcpy(&lower_limit, buf + index, sizeof(lower_limit));

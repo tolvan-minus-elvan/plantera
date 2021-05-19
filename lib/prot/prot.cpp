@@ -134,7 +134,7 @@ uint8_t id_to_len(uint8_t id) {
     return 128;
     break;
   case 1:
-    return 9;
+    return 10;
     break;
   case 2:
     return 0;
